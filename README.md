@@ -8,10 +8,10 @@ This project consists of a python client that interacts with the IBM Watson Spee
 
 Create the file .env and populate it with:
 
-`
+```
 BLUEMIX_USERNAME=<insert Bluemix username>
 BLUEMIX_PASSWORD=<insert Bluemix password>
-`
+```
 
 There are some dependencies that need to be installed for this script to work. In order to interact with the STT service via WebSockets it is necessary to install the 'twisted' and 'autobahn' libraries. An updated version of these libraries can be installed by typing:
 
