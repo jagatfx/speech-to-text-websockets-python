@@ -18,30 +18,30 @@
 # Date:   2015
 
 # coding=utf-8
-import json                                      # json 
+import json                                      # json
 import threading                                 # multi threading
 import os                                        # for listing directories
 import Queue                                     # queue used for thread syncronization
 import sys                                       # system calls
 import argparse                                  # for parsing arguments
-import base64                                    # necessary to encode in base64 according to the RFC2045 standard 
+import base64                                    # necessary to encode in base64 according to the RFC2045 standard
 import requests                                  # python HTTP requests library
 
-# WebSockets 
+# WebSockets
 from autobahn.twisted.websocket import WebSocketClientProtocol, WebSocketClientFactory, connectWS
 from twisted.python import log
 from twisted.internet import ssl, reactor
 
-class Utils:   
+class Utils:
 
    @staticmethod
    def getAuthenticationToken(hostname, serviceName, username, password):
-      
-      uri = hostname +  "/authorization/api/v1/token?url=" + hostname + '/' + serviceName + "/api" 
+
+      uri = hostname +  "/authorization/api/v1/token?url=" + hostname + '/' + serviceName + "/api"
       uri = uri.replace("wss://", "https://");
       uri = uri.replace("ws://", "https://");
       print uri
-      resp = requests.get(uri, auth=(username, password), verify=False, headers= {'Accept': 'application/json'}, 
+      resp = requests.get(uri, auth=(username, password), verify=False, headers= {'Accept': 'application/json'},
                           timeout= (30, 30))
       print resp.text
       jsonObject = resp.json()
@@ -52,7 +52,7 @@ class WSInterfaceFactory(WebSocketClientFactory):
 
    def __init__(self, queue, summary, dirOutput, contentType, model, url=None, headers=None, debug=None):
 
-      WebSocketClientFactory.__init__(self, url=url, headers=headers, debug=debug)   
+      WebSocketClientFactory.__init__(self, url=url, headers=headers, debug=debug)
       self.queue = queue
       self.summary = summary
       self.dirOutput = dirOutput
@@ -67,7 +67,7 @@ class WSInterfaceFactory(WebSocketClientFactory):
       endingThread = threading.Thread(target=self.endReactor, args= ())
       endingThread.daemon = True
       endingThread.start()
-   
+
    def prepareUtterance(self):
 
       try:
@@ -89,9 +89,9 @@ class WSInterfaceFactory(WebSocketClientFactory):
 
       try:
          utt = self.queueProto.get_nowait()
-         proto = WSInterfaceProtocol(self, self.queue, self.summary, self.dirOutput, self.contentType)         
+         proto = WSInterfaceProtocol(self, self.queue, self.summary, self.dirOutput, self.contentType)
          proto.setUtterance(utt)
-         return proto 
+         return proto
       except Queue.Empty:
          print "queue should not be empty, otherwise this function should not have been called"
          return None
@@ -105,7 +105,7 @@ class WSInterfaceProtocol(WebSocketClientProtocol):
       self.queue = queue
       self.summary = summary
       self.dirOutput = dirOutput
-      self.contentType = contentType 
+      self.contentType = contentType
       self.packetRate = 20
       self.listeningMessages = 0
       self.timeFirstInterim = -1
@@ -133,10 +133,10 @@ class WSInterfaceProtocol(WebSocketClientProtocol):
       def sendChunk(chunk, final=False):
          self.bytesSent += len(chunk)
          self.sendMessage(chunk, isBinary = True)
-         if final: 
+         if final:
             self.sendMessage(b'', isBinary = True)
 
-      if (self.bytesSent+self.chunkSize >= len(data)):        
+      if (self.bytesSent+self.chunkSize >= len(data)):
          if (len(data) > self.bytesSent):
             sendChunk(data[self.bytesSent:len(data)],True)
             return
@@ -146,14 +146,14 @@ class WSInterfaceProtocol(WebSocketClientProtocol):
 
    def onConnect(self, response):
       print "onConnect, server connected: {0}".format(response.peer)
-   
+
    def onOpen(self):
       print "onOpen"
       data = {"action" : "start", "content-type" : str(self.contentType), "continuous" : True, "interim_results" : True, "inactivity_timeout": 600}
       data['word_confidence'] = True
       data['timestamps'] = True
       data['max_alternatives'] = 3
-      print "sendMessage(init)" 
+      print "sendMessage(init)"
       # send the initialization parameters
       self.sendMessage(json.dumps(data).encode('utf8'))
 
@@ -163,15 +163,15 @@ class WSInterfaceProtocol(WebSocketClientProtocol):
       self.bytesSent = 0
       dataFile = f.read()
       self.maybeSendChunk(dataFile)
-      print "onOpen ends"      
+      print "onOpen ends"
 
-   
+
    def onMessage(self, payload, isBinary):
 
       if isBinary:
-         print("Binary message received: {0} bytes".format(len(payload)))         
+         print("Binary message received: {0} bytes".format(len(payload)))
       else:
-         print(u"Text message received: {0}".format(payload.decode('utf8')))  
+         print(u"Text message received: {0}".format(payload.decode('utf8')))
 
          # if uninitialized, receive the initialization response from the server
          jsonObject = json.loads(payload.decode('utf8'))
@@ -181,16 +181,16 @@ class WSInterfaceProtocol(WebSocketClientProtocol):
                print "sending close 1000"
                # close the connection
                self.sendClose(1000)
-               
-         # if in streaming 
+
+         # if in streaming
          elif 'results' in jsonObject:
-            jsonObject = json.loads(payload.decode('utf8'))            
+            jsonObject = json.loads(payload.decode('utf8'))
             hypothesis = ""
             # empty hypothesis
             if (len(jsonObject['results']) == 0):
                print "empty hypothesis!"
             # regular hypothesis
-            else: 
+            else:
                # dump the message to the output directory
                jsonObject = json.loads(payload.decode('utf8'))
                f = open(self.fileJson,"a")
@@ -213,7 +213,7 @@ class WSInterfaceProtocol(WebSocketClientProtocol):
       self.summary[self.uttNumber]['status']['reason'] = reason
       if (code == 1000):
          self.summary[self.uttNumber]['status']['successful'] = True
-      
+
       # create a new WebSocket connection if there are still utterances in the queue that need to be processed
       self.queue.task_done()
 
@@ -278,15 +278,15 @@ if __name__ == '__main__':
    fileNumber = 0
    for fileName in(lines):
       print fileName
-      q.put((fileNumber,fileName))   
+      q.put((fileNumber,fileName))
       fileNumber += 1
 
-   hostname = "stream.watsonplatform.net"   
+   hostname = "stream.watsonplatform.net"
    headers = {}
 
    # authentication header
    if args.tokenauth:
-      headers['X-Watson-Authorization-Token'] = Utils.getAuthenticationToken("https://" + hostname, 'speech-to-text', 
+      headers['X-Watson-Authorization-Token'] = Utils.getAuthenticationToken("https://" + hostname, 'speech-to-text',
                                                                              args.credentials[0], args.credentials[1])
    else:
       string = args.credentials[0] + ":" + args.credentials[1]
@@ -315,7 +315,7 @@ if __name__ == '__main__':
    fileHypotheses = args.dirOutput + "/hypotheses.txt"
    f = open(fileHypotheses,"w")
    counter = 1
-   successful = 0 
+   successful = 0
    emptyHypotheses = 0
    for key, value in (sorted(summary.items())):
       if value['status']['successful'] == True:
