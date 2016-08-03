@@ -1,3 +1,6 @@
 .DS_Store
 output/*.json.txt
 .env
+output/*.wav
+recordings/rec*.wav
+*.pyc

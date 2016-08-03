@@ -26,6 +26,10 @@ import sys                                       # system calls
 import argparse                                  # for parsing arguments
 import base64                                    # necessary to encode in base64 according to the RFC2045 standard
 import requests                                  # python HTTP requests library
+import shutil
+
+from os import system
+import recorder
 
 from dotenv import load_dotenv
 from os.path import join, dirname
@@ -69,12 +73,24 @@ class WSInterfaceFactory(WebSocketClientFactory):
       self.openHandshakeTimeout = 6
       self.closeHandshakeTimeout = 6
 
+      self.fileNumber = 0
+
       # start the thread that takes care of ending the reactor so the script can finish automatically (without ctrl+c)
       endingThread = threading.Thread(target=self.endReactor, args= ())
       endingThread.daemon = True
       endingThread.start()
 
    def prepareUtterance(self):
+
+      ###
+      # this is not correct, not the right place
+      # but I'm still figuring out how this works
+      fileName = 'recordings/rec' + str(self.fileNumber) + '.wav'
+      while(False == os.path.isfile(fileName)):
+         recorder.record_to_file(fileName)
+      self.queue.put((self.fileNumber, fileName))
+      self.fileNumber += 1
+      ###
 
       try:
          utt = self.queue.get_nowait()
@@ -165,7 +181,7 @@ class WSInterfaceProtocol(WebSocketClientProtocol):
 
       # start sending audio right away (it will get buffered in the STT service)
       print self.uttFilename
-      f = open(str(self.uttFilename),'rb')
+      f = open(str(self.uttFilename), 'rb')
       self.bytesSent = 0
       dataFile = f.read()
       self.maybeSendChunk(dataFile)
@@ -219,6 +235,8 @@ class WSInterfaceProtocol(WebSocketClientProtocol):
       self.summary[self.uttNumber]['status']['reason'] = reason
       if (code == 1000):
          self.summary[self.uttNumber]['status']['successful'] = True
+         if self.summary[self.uttNumber]['hypothesis']:
+            system("say " + self.summary[self.uttNumber]['hypothesis'].encode('utf-8'))
 
       # create a new WebSocket connection if there are still utterances in the queue that need to be processed
       self.queue.task_done()
@@ -273,12 +291,6 @@ if __name__ == '__main__':
 
    # add audio files to the processing queue
    q = Queue.Queue()
-   lines = [line.rstrip('\n') for line in open(args.fileInput)]
-   fileNumber = 0
-   for fileName in(lines):
-      print fileName
-      q.put((fileNumber,fileName))
-      fileNumber += 1
 
    hostname = "stream.watsonplatform.net"
    headers = {}
@@ -297,8 +309,8 @@ if __name__ == '__main__':
    factory = WSInterfaceFactory(q, summary, args.dirOutput, args.contentType, args.model, url, headers, debug=False)
    factory.protocol = WSInterfaceProtocol
 
-   for i in range(min(int(args.threads),q.qsize())):
-
+   # for i in range(min(int(args.threads), q.qsize())):
+   for i in range(int(args.threads)):
       factory.prepareUtterance()
 
       # SSL client context: default
@@ -312,15 +324,16 @@ if __name__ == '__main__':
 
    # dump the hypotheses to the output file
    fileHypotheses = args.dirOutput + "/hypotheses.txt"
-   f = open(fileHypotheses,"w")
+   f = open(fileHypotheses, "w")
    counter = 1
    successful = 0
    emptyHypotheses = 0
    for key, value in (sorted(summary.items())):
       if value['status']['successful'] == True:
          print key, ": ", value['status']['code'], " ", value['hypothesis'].encode('utf-8')
+         shutil.move('recordings/rec' + str(key) + '.wav', 'recordings/rec-archive' + str(key) + '.wav')
          successful += 1
-         if value['hypothesis'][0] == "":
+         if len(value['hypothesis']) > 0 and value['hypothesis'][0] == "":
             emptyHypotheses += 1
       else:
          print key + ": ", value['status']['code'], " REASON: ", value['status']['reason']
