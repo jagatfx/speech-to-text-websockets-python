@@ -27,10 +27,16 @@ import argparse                                  # for parsing arguments
 import base64                                    # necessary to encode in base64 according to the RFC2045 standard
 import requests                                  # python HTTP requests library
 
+from dotenv import load_dotenv
+from os.path import join, dirname
+
 # WebSockets
 from autobahn.twisted.websocket import WebSocketClientProtocol, WebSocketClientFactory, connectWS
 from twisted.python import log
 from twisted.internet import ssl, reactor
+
+dotenv_path = join(dirname(__file__), '.env')
+load_dotenv(dotenv_path)
 
 class Utils:
 
@@ -235,20 +241,10 @@ def check_positive_int(value):
          raise argparse.ArgumentTypeError("\"%s\" is an invalid positive int value" % value)
     return ivalue
 
-# function to check the credentials format
-def check_credentials(credentials):
-   elements = credentials.split(":")
-   if (len(elements) == 2):
-      return elements
-   else:
-      raise argparse.ArgumentTypeError("\"%s\" is not a valid format for the credentials " % credentials)
-
-
 if __name__ == '__main__':
 
    # parse command line parameters
    parser = argparse.ArgumentParser(description='client to do speech recognition using the WebSocket interface to the Watson STT service')
-   parser.add_argument('-credentials', action='store', dest='credentials', help='Basic Authentication credentials in the form \'username:password\'', type=check_credentials)
    parser.add_argument('-in', action='store', dest='fileInput', default='./recordings.txt', help='text file containing audio files')
    parser.add_argument('-out', action='store', dest='dirOutput', default='./output', help='output directory')
    parser.add_argument('-type', action='store', dest='contentType', default='audio/wav', help='audio content type, for example: \'audio/l16; rate=44100\'')
@@ -256,6 +252,9 @@ if __name__ == '__main__':
    parser.add_argument('-threads', action='store', dest='threads', default='1', help='number of simultaneous STT sessions', type=check_positive_int)
    parser.add_argument('-tokenauth', action='store_true', dest='tokenauth', help='use token based authentication')
    args = parser.parse_args()
+
+   username = os.environ.get("BLUEMIX_USERNAME")
+   password = os.environ.get("BLUEMIX_PASSWORD")
 
    # create output directory if necessary
    if (os.path.isdir(args.dirOutput)):
@@ -287,10 +286,10 @@ if __name__ == '__main__':
    # authentication header
    if args.tokenauth:
       headers['X-Watson-Authorization-Token'] = Utils.getAuthenticationToken("https://" + hostname, 'speech-to-text',
-                                                                             args.credentials[0], args.credentials[1])
+                                                                             username, password)
    else:
-      string = args.credentials[0] + ":" + args.credentials[1]
-      headers["Authorization"] = "Basic " + base64.b64encode(string)
+      auth = username + ":" + password
+      headers["Authorization"] = "Basic " + base64.b64encode(auth)
 
    # create a WS server factory with our protocol
    url = "wss://" + hostname + "/speech-to-text/api/v1/recognize?model=" + args.model
